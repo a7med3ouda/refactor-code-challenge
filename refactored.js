@@ -1,3 +1,5 @@
+// will be uncommented when the code finished
+
 // const startCronJob = require('nugttah-backend/helpers/start.cron.job');
 // const Helpers = require('nugttah-backend/helpers');
 // const Invoice = require('nugttah-backend/modules/invoices');
@@ -5,106 +7,96 @@
 // const Part = require('nugttah-backend/modules/parts');
 // const DirectOrderPart = require('nugttah-backend/modules/direct.order.parts');
 
-let startCronJob;
-let Helpers;
-let Invoice;
-let DirectOrder;
-let Part;
-let DirectOrderPart;
+async function getAllParts() {
+  const dps = await DirectOrderPart.Model.find({
+    partClass: { $in: ["StockPart", "QuotaPart"] },
+    createdAt: { $gt: new Date("2021-04-01") },
+    invoiceId: { $exists: false },
+    fulfillmentCompletedAt: { $exists: true },
+  }).select("_id directOrderId partClass priceBeforeDiscount");
 
-async function getDirectOrderPartsGroups() {
-  try {
-    const dps = await DirectOrderPart.Model.find({
-      partClass: { $in: ["StockPart", "QuotaPart", "requestPart"] },
-      createdAt: { $gt: new Date("2021-04-01") },
-      invoiceId: { $exists: false },
-      fulfillmentCompletedAt: { $exists: true },
-    }).select("_id directOrderId partClass priceBeforeDiscount");
+  const all_ps = await Part.Model.find({
+    partClass: "requestPart",
+    createdAt: { $gt: new Date("2021-04-01") },
+    invoiceId: { $exists: false },
+    pricedAt: { $exists: true },
+    directOrderId: { $exists: true },
+  }).select("_id directOrderId partClass premiumPriceBeforeDiscount");
 
-    const all_ps = await Part.Model.find({
-      partClass: "requestPart",
-      createdAt: { $gt: new Date("2021-04-01") },
-      invoiceId: { $exists: false },
-      pricedAt: { $exists: true },
-      directOrderId: { $exists: true },
-    }).select("_id directOrderId partClass premiumPriceBeforeDiscount");
-
-    return all_ps.concat(dps);
-  } catch (error) {
-    throw Error(
-      `Could not fetch parts data in the database. ${error.message} `
-    );
-  }
+  return all_ps.concat(dps);
 }
 
-// exports.filterDataWithHashTable = function (dataArray) {
-//   const result = {};
-
-//   // O(n)
-//   dataArray.forEach((ele) => {
-//     const id = ele.directOrderId;
-
-//     if (result[id] === undefined) {
-//       result[id] = {
-//         directOrderParts: [],
-//         requestParts: [],
-//       };
-//     }
-
-//     if (ele.partClass === "StockPart" || ele.partClass === "QuotaPart") {
-//       if (result[id].directOrderParts === undefined) {
-//         result[id].directOrderParts = [ele];
-//       } else {
-//         result[id].directOrderParts.push(ele);
-//       }
-//     }
-//     if (ele.partClass === "requestPart") {
-//       if (result[id].requestParts === undefined) {
-//         result[id].requestParts = [ele];
-//       } else {
-//         result[id].requestParts.push(ele);
-//       }
-//     }
-//   });
-
-//   // O(n)
-//   return Object.entries(result);
-// };
-
-exports.filterIds = function (dataArray) {
+exports.groupByOrderIdAndFilter = function (dataArray) {
   const result = {};
 
-  // O(n)
   dataArray.forEach((ele) => {
     const id = ele.directOrderId;
 
-    if (result[id] === undefined) {
-      result[id] = {
-        directOrderPartsIdList: [],
-        requestPartsIdList: [],
-        totalPrice: 0,
-      };
-    }
-
     if (ele.partClass === "StockPart" || ele.partClass === "QuotaPart") {
+      if (result[id] === undefined) {
+        result[id] = {
+          directOrderPartsIdList: [],
+          requestPartsIdList: [],
+          total: 0,
+        };
+      }
+
       result[id].directOrderPartsIdList.push(ele._id);
-      result[id].totalPrice += ele.priceBeforeDiscount;
+      result[id].total += ele.priceBeforeDiscount;
     }
 
     if (ele.partClass === "requestPart") {
+      if (result[id] === undefined) {
+        result[id] = {
+          directOrderPartsIdList: [],
+          requestPartsIdList: [],
+          total: 0,
+        };
+      }
       result[id].requestPartsIdList.push(ele._id);
-      result[id].totalPrice += ele.premiumPriceBeforeDiscount;
+      result[id].total += ele.premiumPriceBeforeDiscount;
     }
   });
 
-  // O(n)
   return Object.entries(result);
 };
 
+function calculateInvoices(totalAmount, directOrder, invoces) {
+  let { walletPaymentAmount, discountAmount } = directOrder;
+  if (directOrder.deliveryFees && invoces.length === 0) {
+    totalAmount += directOrder.deliveryFees;
+  }
+
+  if (walletPaymentAmount) {
+    invoces.forEach((invo) => {
+      walletPaymentAmount = Math.min(
+        0,
+        walletPaymentAmount - invo.walletPaymentAmount
+      );
+    });
+    walletPaymentAmount = Math.min(walletPaymentAmount, totalAmount);
+    totalAmount -= walletPaymentAmount;
+  }
+
+  if (discountAmount) {
+    invoces.forEach((nvc) => {
+      discountAmount = Math.min(0, discountAmount - nvc.discountAmount);
+    });
+    discountAmount = Math.min(discountAmount, totalAmount);
+    totalAmount -= discountAmount;
+  }
+
+  return {
+    totalAmount,
+    walletPaymentAmount,
+    discountAmount,
+  };
+}
+
 async function createInvoice() {
   try {
-    const allParts = await getDirectOrderPartsGroups();
-    const directOrderPartsGroups = filterIds(allParts);
+    const allParts = await getAllParts();
+    const directOrderPartsGroups = groupByOrderIdAndFilter(allParts);
 
     const invcs = [];
 
@@ -115,41 +107,19 @@ async function createInvoice() {
         "partsIds requestPartsIds discountAmount deliveryFees walletPaymentAmount"
       );
 
+      // can be better
       const invoces = await Invoice.Model.find({
         directOrderId: allDirectOrderParts[0],
       }).select("walletPaymentAmount discountAmount deliveryFees");
 
-      const dps_id = allDirectOrderParts[1].directOrderParts.idList;
-      const rps_id = allDirectOrderParts[1].requestParts.idList;
+      const { directOrderPartsIdList, requestPartsIdList, total } =
+        allDirectOrderParts[1];
 
-      const TotalPrice = Helpers.Numbers.toFixedNumber(
-        allDirectOrderParts[1].totalPrice
-      );
-
+      const TotalPrice = Helpers.Numbers.toFixedNumber(total);
       const { deliveryFees } = directOrder;
-      let { walletPaymentAmount, discountAmount } = directOrder;
-      let totalAmount = TotalPrice;
-      if (directOrder.deliveryFees && invoces.length === 0) {
-        totalAmount += directOrder.deliveryFees;
-      }
 
-      if (walletPaymentAmount) {
-        invoces.forEach((invo) => {
-          walletPaymentAmount = Math.min(
-            0,
-            walletPaymentAmount - invo.walletPaymentAmount
-          );
-        });
-        walletPaymentAmount = Math.min(walletPaymentAmount, totalAmount);
-        totalAmount -= walletPaymentAmount;
-      }
-      if (discountAmount) {
-        invoces.forEach((nvc) => {
-          discountAmount = Math.min(0, discountAmount - nvc.discountAmount);
-        });
-        discountAmount = Math.min(discountAmount, totalAmount);
-        totalAmount -= discountAmount;
-      }
+      const { totalAmount, walletPaymentAmount, discountAmount } =
+        calculateInvoices(TotalPrice, directOrder, invoces);
 
       if (totalAmount < 0) {
         throw Error(
@@ -159,8 +129,8 @@ async function createInvoice() {
 
       const invoice = await Invoice.Model.create({
         directOrderId: directOrder._id,
-        directOrderPartsIds: dps_id,
-        requestPartsIds: rps_id,
+        directOrderPartsIds: directOrderPartsIdList,
+        requestPartsIds: requestPartsIdList,
         totalPartsAmount: TotalPrice,
         totalAmount,
         deliveryFees,
@@ -172,8 +142,8 @@ async function createInvoice() {
         { _id: directOrder._id },
         { $addToSet: { invoicesIds: invoice._id } }
       );
-      
-      for (const dp_id of dps_id) {
+
+      for (const dp_id of directOrderPartsIdList) {
         await DirectOrderPart.Model.updateOne(
           { _id: dp_id },
           { invoiceId: invoice._id }
@@ -181,11 +151,11 @@ async function createInvoice() {
       }
 
       // wait for updates before pushing to invoices array
-      await rps_id.map((rp_id) => {
+      await requestPartsIdList.map((rp_id) => {
         return new Promise((resolve, reject) => {
           Part.Model.updateOne({ _id: rp_id }, { invoiceId: invoice._id })
             .then(function (result) {
-              return resolve(result);
+              return resolve();
             })
             .catch(() => {
               reject();
@@ -204,6 +174,8 @@ async function createInvoice() {
     Helpers.reportError(err);
   }
 }
+
+// will be uncommented when the code finished
 
 // startCronJob("*/1 * * * *", createInvoice, true); // at 00:00 every day
 
