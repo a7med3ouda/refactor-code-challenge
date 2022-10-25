@@ -61,28 +61,29 @@ exports.groupByOrderIdAndFilter = function (dataArray) {
   return Object.entries(result);
 };
 
-function calculateInvoices(totalAmount, directOrder, invoces) {
-  let { walletPaymentAmount, discountAmount } = directOrder;
-  if (directOrder.deliveryFees && invoces.length === 0) {
-    totalAmount += directOrder.deliveryFees;
+exports.calculateInvoices = function (totalAmount, directOrder, invoces) {
+  let { walletPaymentAmount, discountAmount, deliveryFees } = directOrder;
+  if (deliveryFees && invoces.length === 0) {
+    totalAmount += deliveryFees;
   }
 
   if (walletPaymentAmount) {
     invoces.forEach((invo) => {
-      walletPaymentAmount = Math.min(
-        0,
-        walletPaymentAmount - invo.walletPaymentAmount
-      );
+      const subtract = walletPaymentAmount - invo.walletPaymentAmount;
+      walletPaymentAmount = subtract < 0 ? subtract : 0;
     });
-    walletPaymentAmount = Math.min(walletPaymentAmount, totalAmount);
+    walletPaymentAmount =
+      walletPaymentAmount < totalAmount ? walletPaymentAmount : totalAmount;
     totalAmount -= walletPaymentAmount;
   }
 
   if (discountAmount) {
     invoces.forEach((nvc) => {
-      discountAmount = Math.min(0, discountAmount - nvc.discountAmount);
+      const subtract = discountAmount - nvc.discountAmount;
+      discountAmount = subtract < 0 ? subtract : 0;
     });
-    discountAmount = Math.min(discountAmount, totalAmount);
+    discountAmount =
+      discountAmount < totalAmount ? discountAmount : totalAmount;
     totalAmount -= discountAmount;
   }
 
@@ -91,7 +92,7 @@ function calculateInvoices(totalAmount, directOrder, invoces) {
     walletPaymentAmount,
     discountAmount,
   };
-}
+};
 
 async function createInvoice() {
   try {

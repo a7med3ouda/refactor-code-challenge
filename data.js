@@ -1,6 +1,6 @@
 const partClass = ["StockPart", "QuotaPart", "requestPart"];
 
-exports.data3 = Array(4)
+exports.data1 = Array(4)
   .fill()
   .map((_, i) => {
     return {
@@ -13,7 +13,7 @@ exports.data3 = Array(4)
   });
 
 //directOrderParts // ["StockPart", "QuotaPart"] -- //requestParts // ["requestPart"]
-exports.result3 = [
+exports.result1 = [
   [
     "drId1",
     {
@@ -32,7 +32,7 @@ exports.result3 = [
   ],
 ];
 
-exports.data4 = Array(20)
+exports.data2 = Array(20)
   .fill()
   .map((_, i) => {
     return {
@@ -46,7 +46,7 @@ exports.data4 = Array(20)
 
 //directOrderParts // ["StockPart", "QuotaPart"] -- priceBeforeDiscount
 //requestParts // ["requestPart"] -- premiumPriceBeforeDiscount
-exports.result4 = [
+exports.result2 = [
   [
     "drId1",
     {
@@ -80,3 +80,46 @@ exports.result4 = [
     },
   ],
 ];
+
+exports.data3 = [
+  100,
+  {
+    partsIds: ["id1", "id2", "id3"],
+    requestPartsIds: ["rqId1", "rqId2", "rqId3"],
+    discountAmount: 20,
+    deliveryFees: 10,
+    walletPaymentAmount: 30,
+  },
+  [
+    { walletPaymentAmount: 20, discountAmount: 10, deliveryFees: 15 },
+    { walletPaymentAmount: 15, discountAmount: 5, deliveryFees: 10 },
+  ],
+];
+
+// 100
+// 30 , 20
+
+//===
+
+// 30 - 20 = 10  --- 0
+// 0 - 15 = -15
+
+// -15
+// 115
+
+///////
+
+// 20 - 10 = 10 ---0
+// 0 - 5 = -5
+
+// -5
+// 120
+
+
+
+
+exports.result3 = {
+  totalAmount: 120,
+  walletPaymentAmount: -15,
+  discountAmount: -5,
+};
