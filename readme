@@ -1,4 +1,4 @@
 # npm i
 # npm run test
 
-## some code will be uncommented at the end
+## first require lines and last export and function executed should be commented in order to test it without database and helper codes.

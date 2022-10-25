@@ -1,15 +1,15 @@
-// will be uncommented when the code finished
+// comment if you want to test without database
+const startCronJob = require('nugttah-backend/helpers/start.cron.job');
+const Helpers = require('nugttah-backend/helpers');
+const Invoice = require('nugttah-backend/modules/invoices');
+const DirectOrder = require('nugttah-backend/modules/direct.orders');
+const Part = require('nugttah-backend/modules/parts');
+const DirectOrderPart = require('nugttah-backend/modules/direct.order.parts');
 
-// const startCronJob = require('nugttah-backend/helpers/start.cron.job');
-// const Helpers = require('nugttah-backend/helpers');
-// const Invoice = require('nugttah-backend/modules/invoices');
-// const DirectOrder = require('nugttah-backend/modules/direct.orders');
-// const Part = require('nugttah-backend/modules/parts');
-// const DirectOrderPart = require('nugttah-backend/modules/direct.order.parts');
-
+// code start
 async function getAllParts() {
   const dps = await DirectOrderPart.Model.find({
-    partClass: { $in: ["StockPart", "QuotaPart"] },
+    // partClass: { $in: ["StockPart", "QuotaPart"] },
     createdAt: { $gt: new Date("2021-04-01") },
     invoiceId: { $exists: false },
     fulfillmentCompletedAt: { $exists: true },
@@ -117,7 +117,6 @@ async function createInvoice() {
         allDirectOrderParts[1];
 
       const TotalPrice = Helpers.Numbers.toFixedNumber(total);
-      const { deliveryFees } = directOrder;
 
       const { totalAmount, walletPaymentAmount, discountAmount } =
         calculateInvoices(TotalPrice, directOrder, invoces);
@@ -133,8 +132,8 @@ async function createInvoice() {
         directOrderPartsIds: directOrderPartsIdList,
         requestPartsIds: requestPartsIdList,
         totalPartsAmount: TotalPrice,
+        deliveryFees: directOrder.deliveryFees,
         totalAmount,
-        deliveryFees,
         walletPaymentAmount,
         discountAmount,
       });
@@ -166,8 +165,7 @@ async function createInvoice() {
   }
 }
 
-// will be uncommented when the code finished
+// comment if you want to test without database
+startCronJob("*/1 * * * *", createInvoice, true); // at 00:00 every day
 
-// startCronJob("*/1 * * * *", createInvoice, true); // at 00:00 every day
-
-// module.exports = createInvoice;
+module.exports = createInvoice;
