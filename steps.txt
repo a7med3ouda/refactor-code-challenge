@@ -1,0 +1,8 @@
+Step one:
+    split code into smaller pieces
+
+step two:
+    rename variables in order not to need to write comments
+
+step three:
+    enhance time complexity if possible
