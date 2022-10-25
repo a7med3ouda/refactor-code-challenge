@@ -143,25 +143,15 @@ async function createInvoice() {
         { $addToSet: { invoicesIds: invoice._id } }
       );
 
-      for (const dp_id of directOrderPartsIdList) {
-        await DirectOrderPart.Model.updateOne(
-          { _id: dp_id },
-          { invoiceId: invoice._id }
-        );
-      }
+      await DirectOrderPart.Model.updateMany(
+        { _id: { $in: directOrderPartsIdList } },
+        { invoiceId: invoice._id }
+      );
 
-      // wait for updates before pushing to invoices array
-      await requestPartsIdList.map((rp_id) => {
-        return new Promise((resolve, reject) => {
-          Part.Model.updateOne({ _id: rp_id }, { invoiceId: invoice._id })
-            .then(function (result) {
-              return resolve();
-            })
-            .catch(() => {
-              reject();
-            });
-        });
-      });
+      await Part.Model.updateMany(
+        { _id: { $in: requestPartsIdList } },
+        { invoiceId: invoice._id }
+      );
 
       invcs.push(invoice._id);
     }
